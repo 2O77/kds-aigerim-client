@@ -9,27 +9,57 @@
             </div>
         </div>
         <div class="sidebar-section">
-            <DashboardSidebar :cityName="selectedCity" :medicineData="medicineData" />
+            <DashboardSidebar :cityName="selectedCity" :medicineData="medicineData" :loading="loading" :error="error" />
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import TurkiyeCitiesMapComponent from '../components/TurkiyeCitiesMapComponent.vue'
 import DashboardTopbar from '../components/DashboardTopbar.vue'
 import DashboardSidebar from '../components/DashboardSidebar.vue'
-import { getMedicinesByCity } from '../data/mockMedicineData'
 
 const selectedCity = ref("Türkiye Geneli")
+const medicineData = ref([])
+const loading = ref(false)
+const error = ref(null)
 
-const medicineData = computed(() => {
-    return getMedicinesByCity(selectedCity.value)
-})
+const fetchMedicines = async (city) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+        const response = await fetch(`http://localhost:3000/api/medicines?city=${encodeURIComponent(city)}`)
+        
+        if (!response.ok) {
+            throw new Error('Veri yüklenemedi')
+        }
+        
+        const data = await response.json()
+        medicineData.value = data.medicines || []
+    } catch (err) {
+        console.error('API hatası:', err)
+        error.value = err.message
+        medicineData.value = []
+    } finally {
+        loading.value = false
+    }
+}
 
 const openSidebar = (cityName) => {
     selectedCity.value = cityName
 }
+
+watch(selectedCity, (newCity) => {
+    if (newCity) {
+        fetchMedicines(newCity)
+    }
+}, { immediate: true })
+
+onMounted(() => {
+    fetchMedicines(selectedCity.value)
+})
 
 </script>
 

@@ -8,30 +8,37 @@
             </div>
         </div>
         <div class="sidebar-content">
-            <div class="search-section">
-                <AutoComplete 
-                    v-model="searchQuery" 
-                    :suggestions="filteredMedicines" 
-                    @complete="searchMedicines"
-                    @item-select="selectMedicine"
-                    placeholder="İlaç ara..."
-                    optionLabel="name"
-                    class="medicine-search"
-                    forceSelection
-                    :pt="{
-                        root: { style: 'width: 100%' },
-                        input: { style: 'width: 100%' }
-                    }"
-                >
-                    <template #option="slotProps">
-                        <div class="medicine-option">
-                            <div class="medicine-name">{{ slotProps.option.name }}</div>
-                            <div class="medicine-manufacturer">{{ slotProps.option.manufacturer }}</div>
-                        </div>
-                    </template>
-                </AutoComplete>
+            <div v-if="loading" class="loading-message">
+                <p>Veriler yükleniyor...</p>
             </div>
-            <div class="medicine-list" v-if="!selectedMedicine">
+            <div v-else-if="error" class="error-message">
+                <p>Hata: {{ error }}</p>
+            </div>
+            <template v-else>
+                <div class="search-section">
+                    <AutoComplete 
+                        v-model="searchQuery" 
+                        :suggestions="filteredMedicines" 
+                        @complete="searchMedicines"
+                        @item-select="selectMedicine"
+                        placeholder="İlaç ara..."
+                        optionLabel="name"
+                        class="medicine-search"
+                        forceSelection
+                        :pt="{
+                            root: { style: 'width: 100%' },
+                            input: { style: 'width: 100%' }
+                        }"
+                    >
+                        <template #option="slotProps">
+                            <div class="medicine-option">
+                                <div class="medicine-name">{{ slotProps.option.name }}</div>
+                                <div class="medicine-manufacturer">{{ slotProps.option.manufacturer }}</div>
+                            </div>
+                        </template>
+                    </AutoComplete>
+                </div>
+                <div class="medicine-list" v-if="!selectedMedicine">
                 <h3>Mevcut İlaçlar</h3>
                 <div class="medicine-items">
                     <div 
@@ -72,6 +79,7 @@
                     <Chart v-if="marketShareChartData" type="doughnut" :data="marketShareChartData" :options="doughnutChartOptions" />
                 </div>
             </div>
+            </template>
         </div>
     </div>
 </template>
@@ -82,6 +90,8 @@ import { ref, computed, watch } from 'vue';
 const props = defineProps({
     cityName: String,
     medicineData: Array,
+    loading: Boolean,
+    error: String,
 });
 
 const searchQuery = ref('');
@@ -92,6 +102,43 @@ const months = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz',
     'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
 ];
+
+const calculateSeasonalSales = (monthlySales) => {
+    if (!monthlySales || monthlySales.length !== 12) return null;
+    
+    const winter = monthlySales.slice(0, 3).reduce((sum, val) => sum + val, 0);
+    const spring = monthlySales.slice(3, 6).reduce((sum, val) => sum + val, 0);
+    const summer = monthlySales.slice(6, 9).reduce((sum, val) => sum + val, 0);
+    const fall = monthlySales.slice(9, 12).reduce((sum, val) => sum + val, 0);
+    
+    const total = winter + spring + summer + fall;
+    
+    if (total === 0) return { Kış: 0, İlkbahar: 0, Yaz: 0, Sonbahar: 0 };
+    
+    return {
+        Kış: Math.round((winter / total) * 100),
+        İlkbahar: Math.round((spring / total) * 100),
+        Yaz: Math.round((summer / total) * 100),
+        Sonbahar: Math.round((fall / total) * 100)
+    };
+};
+
+const calculateMarketShare = (medicineId) => {
+    if (!props.medicineData || props.medicineData.length === 0) return 0;
+    
+    const totalSales = props.medicineData.reduce((sum, med) => {
+        const medTotal = med.monthlySales ? med.monthlySales.reduce((a, b) => a + b, 0) : 0;
+        return sum + medTotal;
+    }, 0);
+    
+    if (totalSales === 0) return 0;
+    
+    const currentMedicine = props.medicineData.find(m => m.id === medicineId);
+    if (!currentMedicine || !currentMedicine.monthlySales) return 0;
+    
+    const currentTotal = currentMedicine.monthlySales.reduce((a, b) => a + b, 0);
+    return Number(((currentTotal / totalSales) * 100).toFixed(1));
+};
 
 const searchMedicines = (event) => {
     const query = event.query.toLowerCase();
@@ -159,15 +206,17 @@ const chartOptions = {
 };
 
 const seasonalChartData = computed(() => {
-    if (!selectedMedicine.value || !selectedMedicine.value.seasonalSales) return null;
+    if (!selectedMedicine.value || !selectedMedicine.value.monthlySales) return null;
 
-    const seasons = selectedMedicine.value.seasonalSales;
+    const seasonalSales = calculateSeasonalSales(selectedMedicine.value.monthlySales);
+    if (!seasonalSales) return null;
+
     return {
-        labels: Object.keys(seasons),
+        labels: Object.keys(seasonalSales),
         datasets: [
             {
                 label: 'Mevsimsel Satış Dağılımı (%)',
-                data: Object.values(seasons),
+                data: Object.values(seasonalSales),
                 backgroundColor: [
                     'rgba(59, 130, 246, 0.6)',
                     'rgba(16, 185, 129, 0.6)',
@@ -215,9 +264,9 @@ const seasonalChartOptions = {
 };
 
 const marketShareChartData = computed(() => {
-    if (!selectedMedicine.value || !selectedMedicine.value.marketShare) return null;
+    if (!selectedMedicine.value) return null;
 
-    const currentShare = selectedMedicine.value.marketShare;
+    const currentShare = calculateMarketShare(selectedMedicine.value.id);
     const otherShare = 100 - currentShare;
 
     return {
@@ -263,7 +312,10 @@ watch(() => props.cityName, () => {
 
 watch(() => props.medicineData, () => {
     clearSelection();
-});
+    if (props.medicineData && props.medicineData.length > 0) {
+        filteredMedicines.value = props.medicineData;
+    }
+}, { immediate: true });
 </script>
 
 
@@ -428,6 +480,17 @@ watch(() => props.medicineData, () => {
 .chart-box {
     width: 100%;
     height: auto;
+}
+
+.loading-message, .error-message {
+    width: 100%;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.error-message {
+    color: #dc2626;
 }
 
 @media (max-width: 1300px) {
