@@ -133,10 +133,12 @@ export const generateInsights = (medicines, periodMonths = 12) => {
   });
   
   if (highPerformers.length > 0) {
+    const medicineNames = highPerformers.slice(0, 3).map(m => m.name).join(', ');
+    const remaining = highPerformers.length > 3 ? ` ve ${highPerformers.length - 3} diğer ilaç` : '';
     insights.push({
       type: 'success',
       icon: 'pi-check-circle',
-      text: `${highPerformers.length} ilaç istikrarlı satış performansı gösteriyor`
+      text: `${medicineNames}${remaining} istikrarlı satış performansı gösteriyor (Tahmin edilebilir talep)`
     });
   }
   
