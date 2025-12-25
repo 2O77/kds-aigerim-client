@@ -2,9 +2,10 @@
     <div class="sidebar">
         <div class="title-box">
             <div class="title-text">
-                <h1 class="text">{{ cityName }}</h1>
-                <p class="text" v-if="selectedMedicine">{{ selectedMedicine.name }} - {{ selectedMedicine.manufacturer }}</p>
-                <p class="text" v-else>İlaç seçiniz</p>
+                <h1 class="text" v-if="selectedMedicine">{{ selectedMedicine.name }}</h1>
+                <h1 class="text" v-else>İlaç Listesi</h1>
+                <p class="text" v-if="selectedMedicine">{{ selectedMedicine.manufacturer }}</p>
+                <p class="text" v-else>Analiz için bir ilaç seçin</p>
             </div>
         </div>
         <div class="sidebar-content">
@@ -16,20 +17,12 @@
             </div>
             <template v-else>
                 <div class="search-section">
-                    <AutoComplete 
-                        v-model="searchQuery" 
-                        :suggestions="filteredMedicines" 
-                        @complete="searchMedicines"
-                        @item-select="selectMedicine"
-                        placeholder="İlaç ara..."
-                        optionLabel="name"
-                        class="medicine-search"
-                        forceSelection
-                        :pt="{
+                    <AutoComplete v-model="searchQuery" :suggestions="filteredMedicines" @complete="searchMedicines"
+                        @item-select="selectMedicine" placeholder="İlaç ara..." optionLabel="name"
+                        class="medicine-search" forceSelection :pt="{
                             root: { style: 'width: 100%' },
                             input: { style: 'width: 100%' }
-                        }"
-                    >
+                        }">
                         <template #option="slotProps">
                             <div class="medicine-option">
                                 <div class="medicine-name">{{ slotProps.option.name }}</div>
@@ -39,46 +32,38 @@
                     </AutoComplete>
                 </div>
                 <div class="medicine-list" v-if="!selectedMedicine">
-                <h3>Mevcut İlaçlar</h3>
-                <div class="medicine-items">
-                    <div 
-                        v-for="medicine in medicineData" 
-                        :key="medicine.id"
-                        class="medicine-item"
-                        @click="selectMedicineFromList(medicine)"
-                    >
-                        <div class="medicine-item-name">{{ medicine.name }}</div>
-                        <div class="medicine-item-manufacturer">{{ medicine.manufacturer }}</div>
+                    <h3>Mevcut İlaçlar</h3>
+                    <div class="medicine-items">
+                        <div v-for="medicine in medicineData" :key="medicine.id" class="medicine-item"
+                            @click="selectMedicineFromList(medicine)">
+                            <div class="medicine-item-name">{{ medicine.name }}</div>
+                            <div class="medicine-item-manufacturer">{{ medicine.manufacturer }}</div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="sidebar-content-item" v-if="selectedMedicine">
-                <div class="chart-header">
-                    <h3>12 Aylık Satış Verisi</h3>
-                    <Button 
-                        size="small" 
-                        severity="secondary" 
-                        outlined 
-                        @click="clearSelection"
-                        label="Temizle"
-                    />
+                <div class="sidebar-content-item" v-if="selectedMedicine">
+                    <div class="chart-header">
+                        <h3>{{ periodMonths === 6 ? '6 Aylık' : '12 Aylık' }} Satış Verisi</h3>
+                        <Button size="small" severity="secondary" outlined @click="clearSelection" label="Temizle" />
+                    </div>
+                    <div class="chart-box">
+                        <Chart v-if="salesChartData" type="bar" :data="salesChartData" :options="chartOptions" />
+                    </div>
                 </div>
-                <div class="chart-box">
-                    <Chart v-if="salesChartData" type="bar" :data="salesChartData" :options="chartOptions" />
+                <div class="sidebar-content-item" v-if="selectedMedicine">
+                    <h3>Mevsimsel Satış Dağılımı</h3>
+                    <div class="chart-box">
+                        <Chart v-if="seasonalChartData" type="bar" :data="seasonalChartData"
+                            :options="seasonalChartOptions" />
+                    </div>
                 </div>
-            </div>
-            <div class="sidebar-content-item" v-if="selectedMedicine">
-                <h3>Mevsimsel Satış Dağılımı</h3>
-                <div class="chart-box">
-                    <Chart v-if="seasonalChartData" type="bar" :data="seasonalChartData" :options="seasonalChartOptions" />
+                <div class="sidebar-content-item" v-if="selectedMedicine">
+                    <h3>Pazar Payı</h3>
+                    <div class="chart-box">
+                        <Chart v-if="marketShareChartData" type="doughnut" :data="marketShareChartData"
+                            :options="doughnutChartOptions" />
+                    </div>
                 </div>
-            </div>
-            <div class="sidebar-content-item" v-if="selectedMedicine">
-                <h3>Pazar Payı</h3>
-                <div class="chart-box">
-                    <Chart v-if="marketShareChartData" type="doughnut" :data="marketShareChartData" :options="doughnutChartOptions" />
-                </div>
-            </div>
             </template>
         </div>
     </div>
@@ -92,6 +77,10 @@ const props = defineProps({
     medicineData: Array,
     loading: Boolean,
     error: String,
+    periodMonths: {
+        type: Number,
+        default: 12
+    }
 });
 
 const searchQuery = ref('');
@@ -103,18 +92,50 @@ const months = [
     'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
 ];
 
+const getMonthLabels = () => {
+    if (props.periodMonths === 6) {
+        return months.slice(-6);
+    }
+    return months;
+};
+
+const getFilteredSales = (monthlySales) => {
+    if (!monthlySales) return [];
+    if (props.periodMonths === 6) {
+        return monthlySales.slice(-6);
+    }
+    return monthlySales;
+};
+
 const calculateSeasonalSales = (monthlySales) => {
-    if (!monthlySales || monthlySales.length !== 12) return null;
-    
-    const winter = monthlySales.slice(0, 3).reduce((sum, val) => sum + val, 0);
-    const spring = monthlySales.slice(3, 6).reduce((sum, val) => sum + val, 0);
-    const summer = monthlySales.slice(6, 9).reduce((sum, val) => sum + val, 0);
-    const fall = monthlySales.slice(9, 12).reduce((sum, val) => sum + val, 0);
-    
+    if (!monthlySales || (monthlySales.length !== 12 && monthlySales.length !== 6)) return null;
+
+    let winter = 0, spring = 0, summer = 0, fall = 0;
+
+    if (monthlySales.length === 12) {
+        winter = monthlySales.slice(0, 3).reduce((sum, val) => sum + val, 0);
+        spring = monthlySales.slice(3, 6).reduce((sum, val) => sum + val, 0);
+        summer = monthlySales.slice(6, 9).reduce((sum, val) => sum + val, 0);
+        fall = monthlySales.slice(9, 12).reduce((sum, val) => sum + val, 0);
+    } else if (monthlySales.length === 6) {
+        const currentMonth = new Date().getMonth();
+        const startMonth = (currentMonth - 5 + 12) % 12;
+
+        for (let i = 0; i < 6; i++) {
+            const monthIdx = (startMonth + i) % 12;
+            const season = Math.floor(monthIdx / 3);
+
+            if (season === 0) winter += monthlySales[i];
+            else if (season === 1) spring += monthlySales[i];
+            else if (season === 2) summer += monthlySales[i];
+            else fall += monthlySales[i];
+        }
+    }
+
     const total = winter + spring + summer + fall;
-    
+
     if (total === 0) return { Kış: 0, İlkbahar: 0, Yaz: 0, Sonbahar: 0 };
-    
+
     return {
         Kış: Math.round((winter / total) * 100),
         İlkbahar: Math.round((spring / total) * 100),
@@ -125,18 +146,20 @@ const calculateSeasonalSales = (monthlySales) => {
 
 const calculateMarketShare = (medicineId) => {
     if (!props.medicineData || props.medicineData.length === 0) return 0;
-    
+
     const totalSales = props.medicineData.reduce((sum, med) => {
-        const medTotal = med.monthlySales ? med.monthlySales.reduce((a, b) => a + b, 0) : 0;
+        const filteredSales = getFilteredSales(med.monthlySales);
+        const medTotal = filteredSales ? filteredSales.reduce((a, b) => a + b, 0) : 0;
         return sum + medTotal;
     }, 0);
-    
+
     if (totalSales === 0) return 0;
-    
+
     const currentMedicine = props.medicineData.find(m => m.id === medicineId);
     if (!currentMedicine || !currentMedicine.monthlySales) return 0;
-    
-    const currentTotal = currentMedicine.monthlySales.reduce((a, b) => a + b, 0);
+
+    const filteredCurrentSales = getFilteredSales(currentMedicine.monthlySales);
+    const currentTotal = filteredCurrentSales.reduce((a, b) => a + b, 0);
     return Number(((currentTotal / totalSales) * 100).toFixed(1));
 };
 
@@ -145,8 +168,8 @@ const searchMedicines = (event) => {
     if (!query) {
         filteredMedicines.value = props.medicineData;
     } else {
-        filteredMedicines.value = props.medicineData.filter(medicine => 
-            medicine.name.toLowerCase().includes(query) || 
+        filteredMedicines.value = props.medicineData.filter(medicine =>
+            medicine.name.toLowerCase().includes(query) ||
             medicine.manufacturer.toLowerCase().includes(query)
         );
     }
@@ -170,12 +193,15 @@ const clearSelection = () => {
 const salesChartData = computed(() => {
     if (!selectedMedicine.value) return null;
 
+    const filteredSales = getFilteredSales(selectedMedicine.value.monthlySales);
+    const labels = getMonthLabels();
+
     return {
-        labels: months,
+        labels: labels,
         datasets: [
             {
                 label: 'Satış Miktarı (Adet)',
-                data: selectedMedicine.value.monthlySales,
+                data: filteredSales,
                 backgroundColor: 'rgba(6, 182, 212, 0.2)',
                 borderColor: '#0891b2',
                 borderWidth: 2,
@@ -208,7 +234,8 @@ const chartOptions = {
 const seasonalChartData = computed(() => {
     if (!selectedMedicine.value || !selectedMedicine.value.monthlySales) return null;
 
-    const seasonalSales = calculateSeasonalSales(selectedMedicine.value.monthlySales);
+    const filteredSales = getFilteredSales(selectedMedicine.value.monthlySales);
+    const seasonalSales = calculateSeasonalSales(filteredSales);
     if (!seasonalSales) return null;
 
     return {
@@ -244,7 +271,7 @@ const seasonalChartOptions = {
         },
         tooltip: {
             callbacks: {
-                label: function(context) {
+                label: function (context) {
                     return context.label + ': %' + context.parsed.y;
                 }
             }
@@ -255,7 +282,7 @@ const seasonalChartOptions = {
             beginAtZero: true,
             max: 50,
             ticks: {
-                callback: function(value) {
+                callback: function (value) {
                     return '%' + value;
                 }
             }
@@ -298,7 +325,7 @@ const doughnutChartOptions = {
         },
         tooltip: {
             callbacks: {
-                label: function(context) {
+                label: function (context) {
                     return context.label + ': %' + context.parsed.toFixed(1);
                 }
             }
@@ -333,13 +360,13 @@ watch(() => props.medicineData, () => {
 
 .title-box {
     width: 100%;
-    height: 111px;
-    min-height: 100px;
+    height: 90px;
+    min-height: 80px;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     border: none;
     position: relative;
     background: var(--background-color);
@@ -353,7 +380,7 @@ watch(() => props.medicineData, () => {
 
 .text:first-child {
     font-weight: 700;
-    font-size: 20px;
+    font-size: 18px;
     color: var(--primary-color);
 }
 
@@ -363,11 +390,11 @@ watch(() => props.medicineData, () => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 30px;
-    padding-bottom: 30px;
-    padding-right: 10px;
-    padding-left: 10px;
-    gap: 30px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    padding-right: 8px;
+    padding-left: 8px;
+    gap: 20px;
 }
 
 .search-section {
@@ -450,8 +477,8 @@ watch(() => props.medicineData, () => {
     justify-content: center;
     flex-direction: column;
     width: 100%;
-    gap: 15px;
-    padding: 20px;
+    gap: 12px;
+    padding: 16px;
     background: rgba(255, 255, 255, 0.5);
     border-radius: 12px;
     border: none;
@@ -468,6 +495,7 @@ watch(() => props.medicineData, () => {
     margin: 0;
     color: var(--text-primary);
     font-weight: 600;
+    font-size: 16px;
 }
 
 .title-text {
@@ -482,7 +510,8 @@ watch(() => props.medicineData, () => {
     height: auto;
 }
 
-.loading-message, .error-message {
+.loading-message,
+.error-message {
     width: 100%;
     padding: 20px;
     text-align: center;

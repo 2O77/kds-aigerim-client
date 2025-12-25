@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import Dashboard from "../views/Dashboard.vue";
+import PharmacyDashboard from "../views/PharmacyDashboard.vue";
 
-const routes = [{ path: "/", component: Dashboard }];
+const routes = [{ path: "/", component: PharmacyDashboard }];
 
 const router = createRouter({
   history: createWebHistory(),
