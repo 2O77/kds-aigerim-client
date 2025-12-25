@@ -125,35 +125,6 @@ export const generateInsights = (medicines, periodMonths = 12) => {
     text: `İlk 3 ilaç toplam satışların %${top3Percentage}'ini oluşturuyor`
   });
   
-  const recentMonths = medicines[0]?.monthlySales?.slice(-3) || [];
-  const previousMonths = medicines[0]?.monthlySales?.slice(-6, -3) || [];
-  
-  if (recentMonths.length > 0 && previousMonths.length > 0) {
-    const recentAvg = recentMonths.reduce((sum, val) => sum + val, 0) / recentMonths.length;
-    const previousAvg = previousMonths.reduce((sum, val) => sum + val, 0) / previousMonths.length;
-    const growth = ((recentAvg - previousAvg) / previousAvg * 100).toFixed(0);
-    
-    if (growth > 10) {
-      insights.push({
-        type: 'success',
-        icon: 'pi-arrow-up',
-        text: `Son 3 ayda satışlar bir önceki döneme göre %${growth} arttı`
-      });
-    } else if (growth < -10) {
-      insights.push({
-        type: 'warning',
-        icon: 'pi-arrow-down',
-        text: `Son 3 ayda satışlar bir önceki döneme göre %${Math.abs(growth)} azaldı`
-      });
-    } else {
-      insights.push({
-        type: 'info',
-        icon: 'pi-minus',
-        text: `Satışlar stabil seyrediyor (değişim: %${Math.abs(growth)})`
-      });
-    }
-  }
-  
   const highPerformers = medicines.filter(med => {
     const sales = filterDataByPeriod(med.monthlySales, periodMonths);
     const avgSales = sales.reduce((sum, val) => sum + val, 0) / sales.length;
